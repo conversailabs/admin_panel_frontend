@@ -154,7 +154,7 @@ export default function LeadsPage() {
     if (searchTerm) {
       filtered = filtered.filter(lead =>
         lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.phone_number?.includes(searchTerm)
       );

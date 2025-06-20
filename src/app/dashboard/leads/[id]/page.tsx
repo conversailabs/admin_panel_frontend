@@ -308,7 +308,7 @@ export default function LeadDetailPage() {
               <Select
                 label="Update Status"
                 value={lead.status}
-                onChange={updateLeadStatus}
+                onChange={(value) => updateLeadStatus(value as Lead["status"])}
                 options={[
                   { value: 'new', label: 'New' },
                   { value: 'contacted', label: 'Contacted' },

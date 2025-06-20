@@ -8,230 +8,119 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { useForm } from '@/hooks/useForm';
 import { validators } from '@/utils/validation';
 import { Campaign, CampaignStep, CampaignTemplate } from '@/types/campaign';
-import { Agent, Lead } from '@/types';
+import { Lead } from '@/types';
+import { CAMPAIGN_TEMPLATES_LIBRARY, AGENT_PERSONA_TEMPLATES, getAgentPersonaForTemplate } from '@/data/campaignTemplates';
+
+interface AgentPersona {
+  name: string;
+  voice: string;
+  greetingMessage: string;
+  conversationScript: string;
+  callOutcomeRules: CallOutcomeRule[];
+}
+
+interface CallOutcomeRule {
+  outcome: string;
+  action: 'retry' | 'no_retry' | 'schedule' | 'review';
+  waitTime: number;
+  maxAttempts: number;
+  scheduleDays: string[];
+  timeWindow: {
+    start: string;
+    end: string;
+  };
+}
 
 interface CampaignForm {
+  // Campaign Basics
   name: string;
   description: string;
   type: Campaign['type'];
-  agent_id: string;
+  
+  // Agent Persona (embedded)
+  agentPersona: AgentPersona;
+  
+  // Template & Sequence
   template_id: string;
+  sequence: CampaignStep[];
+  
+  // Lead Selection
   lead_selection_method: 'manual' | 'filter' | 'import';
   selected_lead_ids: string[];
+  
+  // Scheduling
   timezone: string;
   business_hours_start: string;
   business_hours_end: string;
   allowed_days: string[];
   respect_holidays: boolean;
-  sequence: CampaignStep[];
 }
 
-const CAMPAIGN_TEMPLATES: CampaignTemplate[] = [
+
+
+const DEFAULT_CALL_OUTCOME_RULES: CallOutcomeRule[] = [
   {
-    id: 'cold_outreach_3touch',
-    name: 'Cold Outreach (3-Touch)',
-    description: 'Call → Wait 1 day → Email → Wait 2 days → Follow-up Call',
-    type: 'cold_outreach',
-    estimated_duration_days: 4,
-    recommended_for: ['New prospects', 'Cold leads'],
-    sequence: [
-      {
-        name: 'Initial Call',
-        type: 'call',
-        delay_hours: 0,
-        channel: 'voice',
-        message: 'Introduction and value proposition',
-        order: 1
-      },
-      {
-        name: 'Wait Period',
-        type: 'wait',
-        delay_hours: 24,
-        channel: 'voice',
-        order: 2
-      },
-      {
-        name: 'Follow-up Email',
-        type: 'email',
-        delay_hours: 0,
-        channel: 'email',
-        message: 'Thank you for your time, here are the details we discussed',
-        order: 3
-      },
-      {
-        name: 'Wait Period',
-        type: 'wait',
-        delay_hours: 48,
-        channel: 'voice',
-        order: 4
-      },
-      {
-        name: 'Final Follow-up Call',
-        type: 'call',
-        delay_hours: 0,
-        channel: 'voice',
-        message: 'Final attempt to connect and close',
-        order: 5
-      }
-    ]
+    outcome: 'no_answer',
+    action: 'retry',
+    waitTime: 30,
+    maxAttempts: 3,
+    scheduleDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    timeWindow: { start: '10:00', end: '18:00' }
   },
   {
-    id: 'lead_nurturing_5touch',
-    name: 'Lead Nurturing (5-Touch)',
-    description: 'Call → Email → Wait 3 days → Call → SMS → Wait 1 week → Call',
-    type: 'lead_nurturing',
-    estimated_duration_days: 11,
-    recommended_for: ['Qualified leads', 'Warm prospects'],
-    sequence: [
-      {
-        name: 'Initial Call',
-        type: 'call',
-        delay_hours: 0,
-        channel: 'voice',
-        message: 'Introduction and needs assessment',
-        order: 1
-      },
-      {
-        name: 'Information Email',
-        type: 'email',
-        delay_hours: 2,
-        channel: 'email',
-        message: 'Detailed information based on call discussion',
-        order: 2
-      },
-      {
-        name: 'Wait Period',
-        type: 'wait',
-        delay_hours: 72,
-        channel: 'voice',
-        order: 3
-      },
-      {
-        name: 'Check-in Call',
-        type: 'call',
-        delay_hours: 0,
-        channel: 'voice',
-        message: 'Follow up on information sent',
-        order: 4
-      },
-      {
-        name: 'SMS Reminder',
-        type: 'sms',
-        delay_hours: 24,
-        channel: 'sms',
-        message: 'Quick reminder about our conversation',
-        order: 5
-      },
-      {
-        name: 'Wait Period',
-        type: 'wait',
-        delay_hours: 168,
-        channel: 'voice',
-        order: 6
-      },
-      {
-        name: 'Final Call',
-        type: 'call',
-        delay_hours: 0,
-        channel: 'voice',
-        message: 'Decision timeline and next steps',
-        order: 7
-      }
-    ]
+    outcome: 'busy',
+    action: 'retry',
+    waitTime: 60,
+    maxAttempts: 2,
+    scheduleDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    timeWindow: { start: '10:00', end: '18:00' }
   },
   {
-    id: 'event_followup',
-    name: 'Event Follow-up',
-    description: 'Call → Thank you email → Survey request',
-    type: 'event_followup',
-    estimated_duration_days: 3,
-    recommended_for: ['Event attendees', 'Demo participants'],
-    sequence: [
-      {
-        name: 'Initial Call',
-        type: 'call',
-        delay_hours: 24,
-        channel: 'voice',
-        message: 'Thank you for attending, follow up on interests',
-        order: 1
-      },
-      {
-        name: 'Thank You Email',
-        type: 'email',
-        delay_hours: 2,
-        channel: 'email',
-        message: 'Thank you email with resources and next steps',
-        order: 2
-      },
-      {
-        name: 'Wait Period',
-        type: 'wait',
-        delay_hours: 48,
-        channel: 'voice',
-        order: 3
-      },
-      {
-        name: 'Survey Request',
-        type: 'email',
-        delay_hours: 0,
-        channel: 'email',
-        message: 'Request feedback and satisfaction survey',
-        order: 4
-      }
-    ]
+    outcome: 'callback',
+    action: 'schedule',
+    waitTime: 0,
+    maxAttempts: 2,
+    scheduleDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    timeWindow: { start: '10:00', end: '18:00' }
+  },
+  {
+    outcome: 'not_interested',
+    action: 'no_retry',
+    waitTime: 0,
+    maxAttempts: 0,
+    scheduleDays: [],
+    timeWindow: { start: '10:00', end: '18:00' }
   }
 ];
 
 export default function CreateCampaignPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string>('');
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const router = useRouter();
 
-  const totalSteps = 4;
+  // Get template from URL params if provided
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const templateParam = searchParams.get('template');
+
+  const totalSteps = 5;
 
   useEffect(() => {
-    loadAgents();
     loadLeads();
-  }, []);
-
-  const loadAgents = async () => {
-    setLoadingAgents(true);
-    try {
-      // Mock agents for now
-      const mockAgents: Agent[] = [
-        {
-          id: '1',
-          name: 'Sarah Wilson',
-          identity_name: 'Sarah',
-          identity_role: 'Sales Rep',
-          identity_org: 'Company',
-          language: 'english',
-          enabled_channels: ['voice', 'email'],
-          voice_provider: 'retell',
-          voice_id: 'en-us-female',
-          voice_settings: { speed: 1.0, pitch: 1.0 },
-          prompt_config: { objectives: [], instructions: '' },
-          llm_config: { model: 'gpt-3.5-turbo', temperature: 0.7, max_tokens: 150 },
-          organization_id: 'org1',
-          created_by: 'user1',
-          created_at: '2024-06-20T10:00:00Z',
-          updated_at: '2024-06-20T10:00:00Z'
-        }
-      ];
-      setAgents(mockAgents);
-    } catch (error) {
-      console.error('Failed to load agents:', error);
-    } finally {
-      setLoadingAgents(false);
+    
+    // Auto-apply template if provided
+    if (templateParam) {
+      const template = CAMPAIGN_TEMPLATES_LIBRARY.find(t => t.id === templateParam);
+      if (template) {
+        selectTemplate(template);
+      }
     }
-  };
+  }, [templateParam]);
 
   const loadLeads = async () => {
     setLoadingLeads(true);
@@ -254,6 +143,23 @@ export default function CreateCampaignPage() {
           custom_fields: {},
           created_at: '2024-06-20T10:00:00Z',
           updated_at: '2024-06-20T10:00:00Z'
+        },
+        {
+          id: '2',
+          organization_id: 'org1',
+          name: 'Jane Smith',
+          email: 'jane@techstartup.com',
+          phone_number: '+1234567891',
+          company: 'Tech Startup Inc',
+          title: 'CTO',
+          industry: 'Software',
+          location: 'San Francisco',
+          lead_source: 'linkedin',
+          status: 'new',
+          tags: ['startup', 'technical'],
+          custom_fields: {},
+          created_at: '2024-06-20T11:00:00Z',
+          updated_at: '2024-06-20T11:00:00Z'
         }
       ];
       setLeads(mockLeads);
@@ -269,8 +175,15 @@ export default function CreateCampaignPage() {
       name: '',
       description: '',
       type: 'cold_outreach',
-      agent_id: '',
+      agentPersona: {
+        name: 'Sarah',
+        voice: 'en-us-female',
+        greetingMessage: 'Hi {lead_name}, this is {name} from {organization}.',
+        conversationScript: AGENT_PERSONA_TEMPLATES.saasSDR.conversationScript,
+        callOutcomeRules: DEFAULT_CALL_OUTCOME_RULES,
+      },
       template_id: '',
+      sequence: [],
       lead_selection_method: 'manual',
       selected_lead_ids: [],
       timezone: 'America/New_York',
@@ -278,7 +191,6 @@ export default function CreateCampaignPage() {
       business_hours_end: '17:00',
       allowed_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       respect_holidays: true,
-      sequence: []
     },
     validate: (values) => {
       const errors: Record<string, string> = {};
@@ -290,7 +202,8 @@ export default function CreateCampaignPage() {
         const descValidation = validators.required(values.description);
         if (descValidation !== true) errors.description = descValidation;
         
-        if (!values.agent_id) errors.agent_id = 'Please select an agent';
+        if (!values.agentPersona.name) errors['agentPersona.name'] = 'Agent name is required';
+        if (!values.agentPersona.voice) errors['agentPersona.voice'] = 'Voice selection is required';
       }
       
       if (currentStep === 2) {
@@ -298,6 +211,12 @@ export default function CreateCampaignPage() {
       }
       
       if (currentStep === 3) {
+        if (values.sequence.length === 0) {
+          errors.sequence = 'Please configure at least one sequence step';
+        }
+      }
+      
+      if (currentStep === 4) {
         if (values.selected_lead_ids.length === 0) {
           errors.selected_lead_ids = 'Please select at least one lead';
         }
@@ -314,8 +233,8 @@ export default function CreateCampaignPage() {
       setError('');
       
       try {
-        // Create campaign logic here
-        console.log('Creating campaign:', values);
+        // Create campaign with embedded agent persona
+        console.log('Creating campaign with embedded agent:', values);
         router.push('/dashboard/campaigns');
       } catch (error) {
         setError('Failed to create campaign');
@@ -341,6 +260,29 @@ export default function CreateCampaignPage() {
       ...step,
       id: `step_${index + 1}`
     })));
+
+    // Auto-apply appropriate agent persona for the template
+    const agentPersona = getAgentPersonaForTemplate(template.id);
+    if (agentPersona) {
+      form.setFieldValue('agentPersona', {
+        ...form.values.agentPersona,
+        name: agentPersona.name,
+        voice: agentPersona.voice,
+        greetingMessage: agentPersona.greetingMessage,
+        conversationScript: agentPersona.conversationScript,
+      });
+    }
+  };
+
+  const applyPersonaTemplate = (templateKey: keyof typeof AGENT_PERSONA_TEMPLATES) => {
+    const template = AGENT_PERSONA_TEMPLATES[templateKey];
+    form.setFieldValue('agentPersona', {
+      ...form.values.agentPersona,
+      name: template.name,
+      voice: template.voice,
+      greetingMessage: template.greetingMessage,
+      conversationScript: template.conversationScript,
+    });
   };
 
   const toggleDay = (day: string) => {
@@ -359,11 +301,55 @@ export default function CreateCampaignPage() {
     form.setFieldValue('selected_lead_ids', updated);
   };
 
+  // Sequence step management functions
+  const addSequenceStep = () => {
+    const newStep: CampaignStep = {
+      id: `step_${Date.now()}`,
+      name: 'New Step',
+      type: 'call',
+      delay_hours: 24,
+      channel: 'voice',
+      message: 'Enter your message here',
+      order: form.values.sequence.length + 1
+    };
+    form.setFieldValue('sequence', [...form.values.sequence, newStep]);
+  };
+
+  const updateSequenceStep = (stepId: string, field: keyof CampaignStep, value: any) => {
+    const updated = form.values.sequence.map(step => 
+      step.id === stepId ? { ...step, [field]: value } : step
+    );
+    form.setFieldValue('sequence', updated);
+  };
+
+  const removeSequenceStep = (stepId: string) => {
+    const updated = form.values.sequence.filter(step => step.id !== stepId);
+    // Reorder the remaining steps
+    const reordered = updated.map((step, index) => ({ ...step, order: index + 1 }));
+    form.setFieldValue('sequence', reordered);
+  };
+
+  const moveSequenceStep = (stepId: string, direction: 'up' | 'down') => {
+    const currentIndex = form.values.sequence.findIndex(step => step.id === stepId);
+    if (currentIndex === -1) return;
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= form.values.sequence.length) return;
+    
+    const updated = [...form.values.sequence];
+    [updated[currentIndex], updated[newIndex]] = [updated[newIndex], updated[currentIndex]];
+    
+    // Update order numbers
+    const reordered = updated.map((step, index) => ({ ...step, order: index + 1 }));
+    form.setFieldValue('sequence', reordered);
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
+            {/* Campaign Basics */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 Campaign Details
@@ -403,17 +389,83 @@ export default function CreateCampaignPage() {
                   ]}
                   required
                 />
+              </div>
+            </div>
+
+            {/* Agent Persona Configuration */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                AI Agent Persona
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Configure your AI agent's personality and conversation style for this campaign.
+              </p>
+              
+              <div className="space-y-4">
+                {/* Persona Templates */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quick Setup Templates
+                  </label>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyPersonaTemplate('saasSDR')}
+                    >
+                      SaaS Sales Rep
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyPersonaTemplate('realEstateAgent')}
+                    >
+                      Real Estate Agent
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyPersonaTemplate('insuranceAgent')}
+                    >
+                      Insurance Specialist
+                    </Button>
+                  </div>
+                </div>
                 
-                <Select
-                  label="Assigned Agent"
-                  value={form.values.agent_id}
-                  onChange={(value) => form.handleChange('agent_id', value)}
-                  error={form.touched.agent_id ? form.errors.agent_id : ''}
-                  options={agents.map(agent => ({
-                    value: agent.id,
-                    label: `${agent.name} (${agent.identity_role})`
-                  }))}
-                  disabled={loadingAgents}
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Agent Name"
+                    value={form.values.agentPersona.name}
+                    onChange={(e) => form.setFieldValue('agentPersona', { ...form.values.agentPersona, name: e.target.value })}
+                    placeholder="e.g., Sarah"
+                    required
+                  />
+                  
+                  <Select
+                    label="Voice"
+                    value={form.values.agentPersona.voice}
+                    onChange={(value) => form.setFieldValue('agentPersona', { ...form.values.agentPersona, voice: value })}
+                    options={[
+                      { value: 'en-us-female', label: 'English US Female' },
+                      { value: 'en-us-male', label: 'English US Male' },
+                      { value: 'en-uk-female', label: 'English UK Female' },
+                      { value: 'en-uk-male', label: 'English UK Male' },
+                      { value: 'hinglish-female', label: 'Hinglish Female' },
+                      { value: 'hinglish-male', label: 'Hinglish Male' },
+                    ]}
+                    required
+                  />
+                </div>
+                
+                <Input
+                  label="Greeting Message"
+                  value={form.values.agentPersona.greetingMessage}
+                  onChange={(e) => form.setFieldValue('agentPersona', { ...form.values.agentPersona, greetingMessage: e.target.value })}
+                  placeholder="Hi {lead_name}, this is {name} from {organization}."
+                  helperText="Use {lead_name}, {name}, and {organization} as placeholders"
                   required
                 />
               </div>
@@ -426,14 +478,22 @@ export default function CreateCampaignPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Campaign Template
+                Campaign Template & Sequence
               </h3>
               <p className="text-sm text-gray-600 mb-6">
-                Choose a pre-built template or start from scratch
+                Choose a pre-built template or customize your outreach sequence
               </p>
               
+              <div className="mb-4">
+                <Link href="/dashboard/campaigns/templates">
+                  <Button variant="outline" size="sm">
+                    Browse All {CAMPAIGN_TEMPLATES_LIBRARY.length}+ Templates
+                  </Button>
+                </Link>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {CAMPAIGN_TEMPLATES.map((template) => (
+                {CAMPAIGN_TEMPLATES_LIBRARY.slice(0, 6).map((template) => (
                   <div
                     key={template.id}
                     className={`border rounded-lg p-4 cursor-pointer transition-colors ${
@@ -444,7 +504,14 @@ export default function CreateCampaignPage() {
                     onClick={() => selectTemplate(template)}
                   >
                     <div className="space-y-2">
-                      <h4 className="font-medium">{template.name}</h4>
+                      <div className="flex items-start justify-between">
+                        <h4 className="font-medium">{template.name}</h4>
+                        {template.industry && (
+                          <Badge variant="outline" size="sm">
+                            {template.industry}
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{template.description}</p>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-500">
@@ -454,8 +521,15 @@ export default function CreateCampaignPage() {
                           {template.sequence.length} steps
                         </span>
                       </div>
+                      {template.estimatedConversionRate && (
+                        <div className="text-xs">
+                          <span className="text-green-600 font-medium">
+                            {template.estimatedConversionRate} conversion
+                          </span>
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-1">
-                        {template.recommended_for.map((tag) => (
+                        {template.recommended_for.slice(0, 2).map((tag) => (
                           <span
                             key={tag}
                             className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded"
@@ -463,6 +537,11 @@ export default function CreateCampaignPage() {
                             {tag}
                           </span>
                         ))}
+                        {template.recommended_for.length > 2 && (
+                          <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+                            +{template.recommended_for.length - 2} more
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -472,11 +551,203 @@ export default function CreateCampaignPage() {
               {form.touched.template_id && form.errors.template_id && (
                 <p className="mt-2 text-sm text-red-600">{form.errors.template_id}</p>
               )}
+
+              {/* Conversation Script */}
+              {form.values.template_id && (
+                <div className="mt-6 border-t pt-6">
+                  <h4 className="text-md font-medium text-gray-900 mb-4">
+                    Agent Conversation Script
+                  </h4>
+                  <Textarea
+                    label="YAML Script"
+                    value={form.values.agentPersona.conversationScript}
+                    onChange={(e) => form.setFieldValue('agentPersona', { ...form.values.agentPersona, conversationScript: e.target.value })}
+                    rows={15}
+                    className="font-mono text-sm"
+                    helperText="Customize the conversation flow for your agent"
+                  />
+                </div>
+              )}
             </div>
           </div>
         );
         
       case 3:
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Campaign Sequence Builder
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Configure the steps your AI agent will follow to nurture leads through your campaign.
+              </p>
+              
+              {/* Sequence Steps */}
+              <div className="space-y-4">
+                {form.values.sequence.map((step, index) => (
+                  <div key={step.id} className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-medium">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900">Step {index + 1}</h4>
+                          <div className="flex items-center space-x-2 text-sm text-gray-500">
+                            <Badge variant="outline" size="sm">
+                              {step.channel}
+                            </Badge>
+                            <span>•</span>
+                            <span>
+                              {step.delay_hours === 0 ? 'Immediate' : 
+                               step.delay_hours < 24 ? `${step.delay_hours} hours later` :
+                               `${Math.floor(step.delay_hours / 24)} days later`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveSequenceStep(step.id, 'up')}
+                          disabled={index === 0}
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => moveSequenceStep(step.id, 'down')}
+                          disabled={index === form.values.sequence.length - 1}
+                        >
+                          ↓
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeSequenceStep(step.id)}
+                          disabled={form.values.sequence.length <= 1}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Step Name"
+                        value={step.name}
+                        onChange={(e) => updateSequenceStep(step.id, 'name', e.target.value)}
+                        placeholder="e.g., Initial Qualification Call"
+                      />
+                      
+                      <Select
+                        label="Channel"
+                        value={step.channel}
+                        onChange={(value) => updateSequenceStep(step.id, 'channel', value)}
+                        options={[
+                          { value: 'voice', label: 'Voice Call' },
+                          { value: 'email', label: 'Email' },
+                          { value: 'sms', label: 'SMS' },
+                        ]}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Delay (hours)
+                        </label>
+                        <Input
+                          type="number"
+                          value={step.delay_hours}
+                          onChange={(e) => updateSequenceStep(step.id, 'delay_hours', parseInt(e.target.value) || 0)}
+                          min={0}
+                          placeholder="0"
+                          helperText="0 = immediate, 24 = 1 day later"
+                        />
+                      </div>
+                      
+                      <Select
+                        label="Step Type"
+                        value={step.type}
+                        onChange={(value) => updateSequenceStep(step.id, 'type', value)}
+                        options={[
+                          { value: 'call', label: 'Call' },
+                          { value: 'email', label: 'Email' },
+                          { value: 'sms', label: 'SMS' },
+                          { value: 'wait', label: 'Wait Period' },
+                          { value: 'condition', label: 'Condition' },
+                        ]}
+                      />
+                    </div>
+                    
+                    <Textarea
+                      label="Message/Purpose"
+                      value={step.message || ''}
+                      onChange={(e) => updateSequenceStep(step.id, 'message', e.target.value)}
+                      placeholder="Describe what this step accomplishes..."
+                      rows={2}
+                    />
+                  </div>
+                ))}
+                
+                {/* Add Step Button */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addSequenceStep}
+                  >
+                    + Add Step
+                  </Button>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Add another step to your campaign sequence
+                  </p>
+                </div>
+              </div>
+              
+              {/* Sequence Summary */}
+              {form.values.sequence.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                  <h4 className="font-medium text-blue-900 mb-2">Campaign Timeline</h4>
+                  <div className="space-y-2">
+                    {form.values.sequence.map((step, index) => (
+                      <div key={step.id} className="flex items-center text-sm">
+                        <div className="w-6 h-6 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-xs font-medium mr-3">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium">{step.name}</span>
+                          <span className="text-blue-700 ml-2">
+                            ({step.delay_hours === 0 ? 'Immediate' : 
+                              step.delay_hours < 24 ? `${step.delay_hours}h later` :
+                              `${Math.floor(step.delay_hours / 24)}d later`})
+                          </span>
+                        </div>
+                        <Badge variant="outline" size="sm">
+                          {step.channel}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-xs text-blue-600">
+                    Total campaign duration: {Math.max(...form.values.sequence.map(s => s.delay_hours))} hours 
+                    ({Math.ceil(Math.max(...form.values.sequence.map(s => s.delay_hours)) / 24)} days)
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+        
+      case 4:
         return (
           <div className="space-y-6">
             <div>
@@ -551,12 +822,12 @@ export default function CreateCampaignPage() {
           </div>
         );
         
-      case 4:
+      case 5:
         return (
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Schedule & Configuration
+                Schedule & Launch
               </h3>
               
               <div className="space-y-4">
@@ -624,12 +895,13 @@ export default function CreateCampaignPage() {
             <div className="border-t pt-6">
               <h4 className="text-md font-medium text-gray-900 mb-4">Campaign Summary</h4>
               <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                <div><strong>Name:</strong> {form.values.name}</div>
+                <div><strong>Campaign:</strong> {form.values.name}</div>
                 <div><strong>Type:</strong> {form.values.type.replace('_', ' ')}</div>
-                <div><strong>Agent:</strong> {agents.find(a => a.id === form.values.agent_id)?.name || 'Not selected'}</div>
+                <div><strong>Agent:</strong> {form.values.agentPersona.name} ({form.values.agentPersona.voice.replace(/-/g, ' ')})</div>
                 <div><strong>Leads:</strong> {form.values.selected_lead_ids.length} selected</div>
-                <div><strong>Template:</strong> {CAMPAIGN_TEMPLATES.find(t => t.id === form.values.template_id)?.name || 'None'}</div>
-                <div><strong>Steps:</strong> {form.values.sequence.length}</div>
+                <div><strong>Template:</strong> {CAMPAIGN_TEMPLATES_LIBRARY.find(t => t.id === form.values.template_id)?.name || 'None'}</div>
+                <div><strong>Sequence Steps:</strong> {form.values.sequence.length} steps over {Math.ceil(Math.max(...form.values.sequence.map(s => s.delay_hours), 0) / 24)} days</div>
+                <div><strong>Schedule:</strong> {form.values.business_hours_start} - {form.values.business_hours_end}, {form.values.allowed_days.join(', ')}</div>
               </div>
             </div>
           </div>
@@ -644,9 +916,15 @@ export default function CreateCampaignPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create Campaign</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Create AI Campaign</h1>
           <p className="text-gray-600">
-            Step {currentStep} of {totalSteps}: Set up your outreach campaign
+            Step {currentStep} of {totalSteps}: {
+              currentStep === 1 ? 'Configure campaign and agent persona' :
+              currentStep === 2 ? 'Select template and conversation script' :
+              currentStep === 3 ? 'Build your campaign sequence' :
+              currentStep === 4 ? 'Select target leads' :
+              'Schedule and launch campaign'
+            }
           </p>
         </div>
         <Link href="/dashboard/campaigns">
@@ -693,7 +971,7 @@ export default function CreateCampaignPage() {
                 loading={form.isSubmitting}
                 disabled={form.isSubmitting}
               >
-                {currentStep === totalSteps ? 'Create Campaign' : 'Next'}
+                {currentStep === totalSteps ? 'Launch Campaign' : 'Next'}
               </Button>
             </div>
           </form>

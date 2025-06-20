@@ -28,8 +28,17 @@ export default function LeadImportPage() {
   const [csvData, setCsvData] = useState<ImportRow[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<MappingConfig>({});
+  const [campaignId, setCampaignId] = useState<string>('');
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<any>(null);
+
+  // Mock campaigns for selection
+  const campaigns = [
+    { id: '', name: 'No campaign (add to general leads pool)' },
+    { id: 'campaign_1', name: 'Q1 Enterprise Outreach' },
+    { id: 'campaign_2', name: 'Demo Booking Campaign' },
+    { id: 'campaign_3', name: 'Follow-up Nurturing' },
+  ];
 
   // Standard lead fields that can be mapped
   const leadFields = [
@@ -134,7 +143,8 @@ export default function LeadImportPage() {
           lead_source: 'CSV Import',
           status: 'new',
           tags: [],
-          custom_fields: {}
+          custom_fields: {},
+          campaign_id: campaignId || null
         };
 
         Object.entries(mapping).forEach(([csvColumn, leadField]) => {
@@ -262,6 +272,21 @@ export default function LeadImportPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {/* Campaign Assignment */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">Campaign Assignment (Optional)</h4>
+              <p className="text-sm text-blue-700 mb-3">
+                Assign imported leads directly to a campaign for immediate outreach.
+              </p>
+              <Select
+                value={campaignId}
+                onChange={setCampaignId}
+                options={campaigns.map(c => ({ value: c.id, label: c.name }))}
+                placeholder="Select a campaign..."
+              />
+            </div>
+
+            {/* Field Mapping */}
             {csvHeaders.map((header, index) => (
               <div key={index} className="flex items-center space-x-4 p-3 border rounded-lg">
                 <div className="flex-1">
@@ -307,15 +332,30 @@ export default function LeadImportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              {csvData.length} rows ready for import
+          <div className="mb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                {csvData.length} rows ready for import
+              </div>
+              <div className="flex space-x-2">
+                <Badge variant="success">
+                  {Object.values(mapping).filter(field => field).length} fields mapped
+                </Badge>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <Badge variant="success">
-                {Object.values(mapping).filter(field => field).length} fields mapped
-              </Badge>
-            </div>
+            {campaignId && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-sm">
+                  <span className="font-medium text-blue-900">Campaign Assignment:</span> 
+                  <span className="text-blue-700 ml-1">
+                    {campaigns.find(c => c.id === campaignId)?.name}
+                  </span>
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Leads will be automatically added to this campaign after import
+                </p>
+              </div>
+            )}
           </div>
 
           <Table>

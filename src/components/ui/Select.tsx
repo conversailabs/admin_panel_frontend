@@ -10,12 +10,13 @@ interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onC
   label?: string;
   error?: string;
   helperText?: string;
+  placeholder?: string;
   options: Option[];
   onChange?: (value: string) => void;
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, helperText, options, onChange, ...props }, ref) => {
+  ({ className, label, error, helperText, placeholder = "Select an option...", options, onChange, ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
@@ -34,7 +35,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           onChange={(e) => onChange?.(e.target.value)}
           {...props}
         >
-          <option value="">Select an option...</option>
+          <option value="">{placeholder}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

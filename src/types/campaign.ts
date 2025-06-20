@@ -61,6 +61,8 @@ export interface CampaignTemplate {
   name: string;
   description: string;
   type: Campaign['type'];
+  industry?: string;
+  estimatedConversionRate?: string;
   sequence: Omit<CampaignStep, 'id'>[];
   estimated_duration_days: number;
   recommended_for: string[];
