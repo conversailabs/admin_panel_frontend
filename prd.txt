@@ -1,0 +1,748 @@
+Steps:
+1. Login
+2. Simple UI Prompt Builder -> Define format. Upload Audio files -> (2-3 files) or script -> to
+create prompt.
+3. Voice Selection
+4. Flow Builder -> you define cycle -> how many calls -> define call cycle.
+-> Also to parse
+entities Whatsapp Template Phone Numbers
+Login -> gmail signup. If mobile number + name+ company name not provided -> submit
+it
+Once in ->
+You will see a list of agents.
+-> Agent Name , created date/last edited date
+A button to create a new agent. Creating an agent will have few options ->
+Create Agent -> We have to show options for what you are creating ->
+Fr example ->
+Lead Qualification
+YAML Example:
+# --- Meta -----------
+identity: # required
+name: string
+org: string
+role: string
+language: enum[english, hinglish, hindi, ...] # UI dropdown
+# --- Opening Messages -----------
+greeting: string # first line
+intro
+_
+optin: string|null # optional second line that asks for consent
+# --- Main Flow -----------
+flow: # ordered array => finite-state machine
+- id: q1
+type: question|info|objection
+handler
+_
+text: string # question or statement
+entity: string|null # name to capture in DB
+followups: [string]|null
+objections: # only for type=objection
+handler
+_
+key: reply
+...
+# --- Closing -----------
+closing: string # final polite sign-off
+Version 2:
+Here are detailed UX + backend flowcharts for the three YAML generation methods:
+Generate from Script, Website, and Audio File — each clearly showing user interaction +
+model/backend processing.
+🔹 1. Generate from Script
+User Flow
+sql
+CopyEdit
+User clicks [Generate from Script]
+↓
+Modal opens:
+"Paste your call script or sample conversation"
+↓
+User pastes script → clicks [Generate YAML]
+↓
+Backend parses script → uses LLM (e.g. GPT) to extract:
+- greeting
+- probing
+- pitch
+- objections
+↓
+YAML is returned → inserted into Prompt Builder editor
+↓
+User reviews → clicks [Save Prompt]
+Backend Logic
+pgsql
+CopyEdit
+Input: Free-form script text
+↓
+Use GPT-4 (structured output prompt like):
+“Extract YAML with keys: greeting, probing, pitch, objections from
+this script”
+Return YAML (validated)
+Send to frontend
+↓
+↓
+↓
+Optionally store temp version in Supabase (autosave)
+🔹 2. Generate from Website
+User Flow
+sql
+CopyEdit
+User clicks [Generate from Website]
+↓
+Modal opens:
+"Enter a webpage URL or paste its content"
+↓
+User enters URL or content → clicks [Generate YAML]
+↓
+Backend:
+- Fetches + scrapes site
+- Summarizes to extract sales pitch/flow
+- Converts to YAML with LLM
+↓
+YAML returned → inserted into Prompt Builder
+↓
+User reviews → clicks [Save Prompt]
+Backend Logic
+vbnet
+CopyEdit
+Input: URL or raw website text
+↓
+If URL: Fetch site → extract main content (via readability.js or
+cheerio)
+↓
+Prompt GPT to:
+“Based on the content below, generate a YAML sales pitch format with:
+greeting, probing, pitch, objections”
+↓
+Return YAML → insert into UI
+🔹 3. Generate from Audio File
+User Flow
+sql
+CopyEdit
+User clicks [Generate from Audio File]
+↓
+Upload modal opens
+"Upload a call recording (MP3/WAV)"
+↓
+User uploads file → clicks [Generate YAML]
+↓
+Backend:
+- Transcribes audio (e.g., Whisper)
+- Segments into speaker turns
+- LLM extracts prompt structure
+↓
+YAML inserted into editor
+↓
+User reviews → clicks [Save Prompt]
+Backend Logic
+vbnet
+CopyEdit
+Input: Audio file (.mp3/.wav)
+↓
+Step 1: Transcribe with Whisper or AssemblyAI
+↓
+Step 2: Segment transcript by turns
+↓
+Step 3: Prompt GPT:
+“Convert the following call transcript into YAML:
+- greeting
+- probing
+- pitch
+- objections”
+↓
+Validate + return YAML → UI
+Voice:
+Spec and Flow: Language & Voice
+Selection
+VERSION 1: Hardcoded Voice IDs
+Spec
+●
+●
+●
+●
+●
+Supported Languages/Styles:
+○
+US English (Male, Female)
+○
+UK English (Male, Female)
+○
+Hinglish (Male, Female)
+Each option mapped to a hardcoded voice ID in backend (e.g., en-US-male-1)
+User can only pick from a fixed set of 6 options
+Voice preview/play not mandatory (optional: play sample)
+Stored as agent.voice_id in Supabase
+User Flow
+1. User lands on Create/Edit Agent page (tab: Voice/Language or inside Prompt Builder).
+2. Sees “Choose Language & Voice” section.
+3. Picks one of:
+○
+US English → Male
+○
+US English → Female
+○
+UK English → Male
+○
+UK English → Female
+○
+○
+Hinglish → Male
+Hinglish → Female
+4. Hits [Save] (saves voice_id).
+Wireframe (Text)
+markdown
+CopyEdit
+-----------------------------------------------
+| Choose Language & Voice |
+-----------------------------------------------
+| [ ] US English ( ) Male ( ) Female |
+| [ ] UK English ( ) Male ( ) Female |
+| [ ] Hinglish ( ) Male ( ) Female |
+-----------------------------------------------
+[ Save Voice ]
+Optionally show: “Current Selection: US English, Male” or play sample
+VERSION 2: User Chooses from Available Voices
+Spec
+●
+●
+●
+●
+●
+Backend fetches available voices for each language (from API or voice provider)
+User first selects language (US English, UK English, Hinglish)
+Next, user selects gender (if available)
+Then, user sees a list/grid of available voices (names, sample, style)
+Each voice may have:
+○
+Voice name (e.g.,
+“Jenny, US Female 1”)
+○
+Voice ID
+●
+○
+○
+Play sample button
+Accent, style, description
+User selects a voice and saves
+●
+Stored as agent.voice_id and/or agent.voice_settings in Supabase
+User Flow
+1. User opens “Choose Language & Voice.
+”
+2. Selects a language (US English, UK English, Hinglish)
+3. Selects gender (if shown)
+4. Sees full list of voices matching selection:
+○
+Name, style, play button, pick radio
+5. Selects voice → [Save Voice]
+Wireframe (Text)
+markdown
+CopyEdit
+-----------------------------------------------
+| Choose Language & Voice |
+-----------------------------------------------
+| Language: [ US English ▼ ] |
+| Gender: [ Male ▼ ] |
+-----------------------------------------------
+| Available Voices: |
+| (•) Jenny | US English | Female | [▶] |
+| ( ) Amy | US English | Female | [▶] |
+| ( ) Mike | US English | Male | [▶] |
+| ( ) Brian | UK English | Male | [▶] |
+| ( ) Raj | Hinglish | Male | [▶] |
+| ... |
+-----------------------------------------------
+[ Save Voice ]
+Each [▶] is a play button for sample.
+Wireframe Image Prompt (for AI):
+"Wireframe for an admin dashboard section titled 'Choose Language & Voice'
+.
+Version 1: Six fixed radio options for US English, UK English, and Hinglish, each
+with Male/Female, and a Save button. Version 2: Dropdown for language and
+gender, then a scrollable/grid list of available voices with name, accent, gender,
+play sample button, and radio select. Minimal, clean UI, monochrome palette.
+"
+Summary Table
+Feature Version 1 Version 2
+Voice Options Fixed (6 total) Dynamic list from backend
+User Control Simple pick Browse, preview, pick
+Voice Preview Optional Strongly recommended
+Data Stored agent.voice_
+id
+agent.voice_id, details
+Call Outcome & Cycle Management Spec
+A. UI Wireframe (Text)
+markdown
+CopyEdit
+-------------------- Call Outcome & Cycle Settings
+----------------------
+| Outcome | Action Schedule | [Edit] |
+| Wait Time | Max Attempts | Attempt
+----------------------------------------------------------------------
+--------------------
+| No Answer | Retry | 30 min | 3 | 10:00–18:00,
+Mon–Sat | [✏] |
+| Busy | Retry | 60 min | 2 | 10:00–18:00,
+Mon–Sat | [✏] |
+| Callback | Schedule | User time | 2 | 10:00–18:00,
+Mon–Sat | [✏] |
+| Hangs Up | No Retry | - | - | -
+| [✏] |
+| Dropped | Retry | 15 min | 2 | 10:00–18:00,
+Mon–Sat | [✏] |
+| Not Interested| No Retry | - | - | -
+| [✏] |
+| Other | Review | - | - | -
+| [✏] |
+----------------------------------------------------------------------
+--------------------
+[ + Add Outcome Rule ]
+* Clicking [✏] opens an "Edit Rule" modal:
+-----------------------------------------------------
+| Outcome: [Dropdown] |
+| Action: [Dropdown: Retry, No Retry, ...] |
+| Wait Time: [Input][min/hr] |
+| Max Attempts: [Input] |
+| Attempt Days: [Mon][Tue][Wed][Thu][Fri][Sat] |
+| Time Window: [10:00] – [18:00] |
+-----------------------------------------------------
+[ Save Rule ]
+B. Backend Spec
+Data Structure (Per Rule, per Agent/Campaign):
+json
+CopyEdit
+{
+"outcome": "no_answer"
+,
+"action": "retry"
+"wait": 30,
+"unit": "min"
+,
+,
+"max_attempts": 3,
+"schedule": {
+"days": ["Mon"
+"Tue"
+"Wed"
+"Thu"
+,
+,
+,
+"time_window": { "start": "10:00"
+,
+"Fri"
+,
+,
+"Sat"],
+"end": "18:00" }
+}
+}
+●
+Store an array of rules (JSON/YAML) per agent or per campaign in Supabase.
+●
+Outcomes: e.g. no_answer, busy, callback, hangup, dropped, not_interested,
+other
+●
+Actions: retry, schedule, no_retry, review
+Endpoints
+●
+GET /api/agent/:id/cycle-rules → Fetches current rules
+●
+POST /api/agent/:id/cycle-rules → Updates rules from UI
+●
+POST /api/call-complete → Called when call ends; backend applies rule logic
+Call Processing Logic
+On call completion:
+1. Log the call (outcome, timestamp, attempts, etc.).
+2. Determine outcome (from telephony, AI agent, or human input).
+3. Find matching rule for this outcome.
+4. If action = retry/schedule:
+○
+Calculate next attempt time:
+■ Wait specified interval
+■ Ensure it falls within allowed days/time window
+■ If not, find next allowed window
+○
+Increment attempt count
+○
+If max_attempts reached, do not retry
+○
+Update lead status/cycle state in DB
+5. If action = review:
+○
+6. If action = no
+○
+Flag lead for human review
+_
+retry:
+Mark as complete/closed
+C. Example Rule Array (Supabase field: cycle_rules):
+json
+CopyEdit
+[
+{
+"outcome": "no_answer"
+"action": "retry"
+,
+,
+"wait": 30,
+"unit": "min"
+,
+"max_attempts": 3,
+"schedule": {
+"days": ["Mon"
+"Tue"
+"Wed"
+"Thu"
+,
+,
+,
+"time_window": { "start": "10:00"
+,
+"Fri"
+,
+,
+"Sat"],
+"end": "18:00" }
+}
+},
+{
+"outcome": "callback"
+,
+"action": "schedule"
+,
+"wait": null,
+"max_attempts": 2,
+"schedule": {
+"days": ["Mon"
+"Tue"
+"Wed"
+"Thu"
+,
+,
+,
+"time_window": { "start": "10:00"
+,
+"Fri"
+,
+,
+"Sat"],
+"end": "18:00" }
+}
+}
+// ... other rules
+]
+D. How Scheduler Works
+●
+When it's time for the next attempt, backend:
+○
+Checks current time against allowed schedule
+○
+Schedules immediately if allowed, else finds next valid window
+○
+Updates next
+_
+attempt time for lead in DB
+Summary
+●
+UI: Table of outcomes with action, wait time, max attempts, and schedule.
+●
+○
+[Edit] button for modal with details.
+Backend: JSON rules per agent/campaign in Supabase; applies on call completion;
+respects time/day windows.
+Spec: Call Results, Data Mapping, and
+Outcome Flow
+A. Agent Call Results & Response History
+UI: Call History Table (per Agent or per Lead)
+markdown
+CopyEdit
+---------------------------------------------------------------
+| Call Time | Number | Result | Data Collected |
+Outcome | [View]
+----------------------------------------------------------------------
+-
+| 2024-06-21 10:13 | +91987... | Connected | {name: Ravi} |
+Completed | [👁]
+| 2024-06-20 17:05 | +91987... | No Answer | {} |
+Retry set | [👁]
+| 2024-06-20 12:40 | +91987... | Callback asked | {email: ravi@...} |
+Scheduled | [👁]
+| ...
+---------------------------------------------------------------
+●
+●
+Each row = one attempt
+[View] button opens a modal to see:
+○
+○
+○
+○
+Full call transcript (if available)
+Audio recording (if available)
+Data fields collected (structured)
+Exact outcome determined
+B. Data Mapping (Custom Fields to Collect Per Call)
+Admin Setup UI: Data Fields for Agent
+●
+In “Agent Config” or “Prompt Builder,
+” let admin define:
+○
+Fields to collect: (e.g., Name, Email, Company, Loan Amount, etc.)
+○
+Field type: Text, Number, Option, Date, etc.
+○
+“Required” toggle
+Example UI:
+pgsql
+CopyEdit
+| Field Name ----------------- Data Mapping (Fields to Collect) ------------------
+| Field Type | Required | [Edit] | [Delete] |
+---------------------------------------------------------------
+| Name | Text | Yes | | |
+| Email | Text | No | | |
+| Loan Amount | Number | No | | |
+---------------------------------------------------------------
+[ + Add Field ]
+●
+Saved per agent. Stored as array/JSON in Supabase.
+Backend Spec for Data Mapping
+json
+CopyEdit
+{
+"agent_id": "123"
+,
+"fields": [
+{"name": "Name"
+,
+{"name": "Email"
+,
+{"name": "Loan Amount"
+"type": "text"
+,
+"required": true},
+"type": "text"
+,
+"required": false},
+,
+"type": "number"
+,
+"required": false}
+]
+}
+●
+When call is processed, backend/AI ensures these fields are extracted from the
+transcript/inputs.
+C. Linking Results to Outcome Flow (Cycle Management)
+●
+Next action (retry, schedule, review, complete) — auto-calculated by backend
+using the rules
+●
+Each call result contains:
+○
+Outcome (No Answer, Callback, Busy, Not Interested, etc.)
+○
+Data collected (according to mapping)
+○
+Timestamp, attempt number
+○
+After each call:
+○
+Result saved to call history (with transcript, audio, data)
+○
+Lead status updated according to outcome/cycle rule
+○
+Next scheduled attempt, if needed, is calculated and displayed
+Backend Spec: Call Attempt Record (in Supabase or DB)
+json
+CopyEdit
+{
+"call_id": "abc123"
+,
+"agent_id": "xyz789"
+,
+"lead_id": "lead001"
+,
+"timestamp": "2024-06-21T10:13:00Z"
+,
+"number": "+91987...
+"
+,
+"transcript": "Full text...
+"
+,
+"audio_url": "https://...
+"
+,
+"data_collected": {
+"Name": "Ravi"
+,
+"Email": "ravi@example.com"
+},
+"outcome": "callback"
+,
+"next_action": "schedule"
+,
+"next_attempt_time": "2024-06-22T10:00:00Z"
+"attempt_number": 2
+,
+}
+Workflow: Bringing it Together
+1. Admin defines data fields for agent.
+2. Agent makes call (manual/auto/AI):
+○
+Call is recorded/transcribed.
+○
+AI/logic parses transcript for required fields (data mapping).
+○
+Determines outcome (call picked, callback asked, etc.).
+3. Call result is logged (with all fields, transcript, outcome, etc.)
+4. Cycle logic applied:
+5. 6. ○
+If “retry,
+” next time is scheduled.
+○
+If “callback,
+” schedules for user-requested time.
+○
+If “not interested,
+” no further action.
+All results visible in history table for agent/lead.
+Admin can audit/view transcript, outcome, and mapped data.
+Summary Table of Components
+UI/Feature Backend Data Purpose
+Call History Table call_attempts table See all call attempts,
+outcomes, data
+Data Mapping Config agent.fields What info to extract per call
+Outcome → Cycle Rule
+call_attempts.next_action
+Link
+, rules
+Automate next steps per
+outcome
+Call Details Modal Transcript, audio, data Deep-dive into each call
+Wireframe (Text Overview)
+markdown
+CopyEdit
+---------------------- Agent: SalesBot001 ------------------------
+[TABs: Prompt Builder | Audio | Flow | Phone Setup | Call History ]
+------------------------ Call History ---------------------------
+| Call Time | Number | Outcome | Data | [View] |
+| ... | ... | ... | ... | ... |
+---------------------------------------------------------------
+------------------------ Data Mapping ---------------------------
+| Field Name | Type | Required | ... |
+| ... | ... | ... | ... |
+---------------------------------------------------------------
+Limits/Budgeting:
+Spec: Limit Minutes Called per Day
+A. UI Wireframe (Settings & Usage)
+Agent/Campaign Settings:
+sql
+CopyEdit
+------------------ Agent Call Limits & Usage --------------------
+| Max Calls per Day | [ 50 ] |
+| Max Minutes per Day | [ 120 ] | ← NEW
+| Max Attempts per Lead | [ 3 ] |
+------------------------------------------------
+[ Save Limits ]
+------------------------------------------------
+Current Usage (Today):
+| Calls Made: | 18 / 50 |
+| Minutes Used: | 92 / 120 | ← NEW
+| Attempts per Lead: | 2 / 3 |
+------------------------------------------------
+B. Backend/Data Model
+Store in DB/Supabase:
+json
+CopyEdit
+{
+"agent_id": "xyz789"
+,
+"max_calls_per_day": 50,
+"max_minutes_per_day": 120, // NEW
+"max_attempts_per_lead": 3
+}
+●
+●
+Track per agent/campaign:
+○
+calls
+_
+made (today)
+○
+minutes
+_
+used (today, sum of durations from call records)
+○
+attempts
+_
+by_
+lead
+C. Logic: When Placing/Scheduling a Call
+1. Before making a call:
+○
+Query today’s total minutes for this agent/campaign.
+○
+If minutes_used + estimated_next_call_minutes >
+max_minutes_per_day:
+■ Do not place the call.
+■ Mark lead as “limit reached for today” or show UI warning.
+○
+Otherwise, allow call.
+2. After each call:
+○
+Log call duration (e.g., 4.2 minutes).
+○
+Add to agent’s/campaign’s today’s minutes.
+3. Reset minutes
+_
+used at midnight.
+D. Call Attempt Record (for minutes):
+json
+CopyEdit
+{
+"call_id": "call_001"
+,
+"agent_id": "xyz789"
+,
+"timestamp": "2024-06-21T10:30:00Z"
+"duration_seconds": 252, "duration_minutes": 4.2,
+,
+// 4 min 12 sec
+...
+}
+●
+Sum duration_minutes per agent per day for live counter.
+E. Admin/Dashboard View
+●
+●
+Show progress bar for "Minutes used today" per agent/campaign.
+Show clear message when limit is reached:
+○
+"Daily call minutes limit reached. Further calls will resume tomorrow.
+"
+F. Example Current Usage Tracking (JSON)
+json
+CopyEdit
+{
+"agent_id": "xyz789"
+,
+"date": "2024-06-21"
+,
+"calls_made": 18,
+"minutes_used": 92,
+"attempts_by_lead": {
+"lead001": 2,
+"lead002": 1
+}
+}
+G. Enforcement Policy
+●
+●
+Calls attempted after reaching the minute limit are blocked or queued for next day.
+Admin notified via dashboard/alert.
+Summary Table
+Setting Stored in DB Tracked Live Shown on UI Blocks
+Calls?
+Max calls per day Yes Yes Yes Yes
+Max minutes per day Yes Yes Yes Yes
+Max attempts per lead Yes Yes Yes Yes

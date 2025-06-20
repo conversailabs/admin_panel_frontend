@@ -1,0 +1,1032 @@
+# Voice AI Sales Agent Backend - Frontend Integration Documentation
+
+## 🎯 Overview
+
+This document provides complete frontend integration details for the Voice AI Sales Agent backend. The system is a comprehensive multi-channel communication platform with AI-powered sales agents, real-time call management, and advanced content generation capabilities.
+
+## 🏗️ System Architecture
+
+### Core Components
+- **Authentication System**: JWT-based with organization support
+- **Organization Management**: Multi-tenant with role-based access
+- **Agent Management**: AI-powered voice/email/SMS agents with Retell integration
+- **Lead Management**: Contact management with assignment system
+- **Call Management**: Voice calls via Retell AI with real-time AI responses
+- **Content Generation**: AI-powered template and script generation
+- **Communication Scheduling**: Time zone aware automation and campaigns
+- **Analytics & Reporting**: Real-time usage and performance metrics
+
+### Tech Stack
+- **Backend**: FastAPI (Python)
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: JWT tokens
+- **Voice**: Retell AI integration
+- **AI**: OpenAI GPT integration
+- **Real-time**: WebSocket support
+
+---
+
+## 🔐 Authentication Flow
+
+### Base URL
+```
+http://localhost:8000
+```
+
+### 1. User Registration
+```http
+POST /api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "name": "User Name",
+  "phone_number": "+1234567890" // optional
+}
+```
+
+**Response:**
+```json
+{
+  "user_id": "uuid",
+  "email": "user@example.com",
+  "name": "User Name",
+  "message": "User created successfully"
+}
+```
+
+### 2. User Login
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "jwt_token_here",
+  "token_type": "bearer",
+  "expires_in": 86400,
+  "user_id": "uuid",
+  "org_id": "uuid_or_null",
+  "role": "owner|admin|member|viewer"
+}
+```
+
+### 3. Authentication Headers
+All authenticated requests require:
+```http
+Authorization: Bearer {access_token}
+```
+
+---
+
+## 🏢 Organization Management
+
+### Create Organization
+```http
+POST /api/organizations/
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "My Organization",
+  "billing_email": "billing@example.com" // optional
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "My Organization",
+  "owner_id": "uuid",
+  "max_calls_per_day": 500,
+  "max_minutes_per_day": 1200,
+  "max_attempts_per_lead": 5,
+  "subscription_tier": "free",
+  "billing_email": "billing@example.com",
+  "created_at": "2025-06-20T09:09:06.143766+00:00",
+  "updated_at": "2025-06-20T09:09:06.143766+00:00"
+}
+```
+
+### Get Current Organization
+```http
+GET /api/organizations/current
+Authorization: Bearer {token}
+```
+
+### Organization Members Management
+```http
+GET /api/organizations/current/members
+POST /api/organizations/current/members
+PUT /api/organizations/current/members/{member_id}
+DELETE /api/organizations/current/members/{member_id}
+```
+
+---
+
+## 🤖 Agent Management
+
+### Create Agent
+```http
+POST /api/agents/
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "Sarah Wilson",
+  "identity_name": "Sarah",
+  "identity_role": "Senior Sales Representative",
+  "identity_org": "My Company",
+  "language": "english",
+  "enabled_channels": ["voice", "email", "sms"],
+  "voice_provider": "retell",
+  "voice_id": "retell_default_female",
+  "prompt_config": {
+    "objectives": [
+      "Generate qualified leads",
+      "Book product demos",
+      "Close sales"
+    ],
+    "instructions": "Be friendly, professional, and focus on understanding customer needs."
+  },
+  "llm_config": {
+    "model": "gpt-3.5-turbo",
+    "temperature": 0.7,
+    "max_tokens": 150
+  },
+  "voice_settings": {
+    "speed": 1.0,
+    "pitch": 1.0
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "name": "Sarah Wilson",
+  "identity_name": "Sarah",
+  "identity_org": "My Company",
+  "identity_role": "Senior Sales Representative",
+  "language": "english",
+  "enabled_channels": ["voice", "email", "sms"],
+  "voice_provider": "retell",
+  "voice_id": "retell_default_female",
+  "voice_settings": {...},
+  "prompt_config": {...},
+  "llm_config": {...},
+  "created_by": "uuid",
+  "created_at": "timestamp",
+  "updated_at": "timestamp"
+}
+```
+
+### List Agents
+```http
+GET /api/agents/?limit=50&offset=0
+Authorization: Bearer {token}
+```
+
+### Get Agent Details
+```http
+GET /api/agents/{agent_id}
+Authorization: Bearer {token}
+```
+
+### Update Agent
+```http
+PUT /api/agents/{agent_id}
+Authorization: Bearer {token}
+```
+
+### Delete Agent
+```http
+DELETE /api/agents/{agent_id}
+Authorization: Bearer {token}
+```
+
+### Get Voice Providers
+```http
+GET /api/agents/voice-providers
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "provider": "retell",
+    "voice_id": "retell_default_female",
+    "voice_name": "Default Female",
+    "language": "en-US",
+    "gender": "female",
+    "accent": "american",
+    "style": "professional",
+    "is_active": true
+  }
+]
+```
+
+### Clone Agent
+```http
+POST /api/agents/{agent_id}/clone
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "new_name": "Cloned Agent Name"
+}
+```
+
+### Agent Statistics
+```http
+GET /api/agents/{agent_id}/stats
+Authorization: Bearer {token}
+```
+
+---
+
+## 👥 Lead Management
+
+### Create Lead
+```http
+POST /api/leads/
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "phone_number": "+1234567890",
+  "company": "Example Corp",
+  "title": "CEO",
+  "industry": "Technology",
+  "location": "New York, NY",
+  "lead_source": "website",
+  "status": "new",
+  "tags": ["hot-lead", "enterprise"],
+  "custom_fields": {
+    "budget": "100k-500k",
+    "timeline": "Q1 2025"
+  }
+}
+```
+
+### List Leads
+```http
+GET /api/leads/?limit=50&offset=0&status=new&search=john
+Authorization: Bearer {token}
+```
+
+### Get Lead Details
+```http
+GET /api/leads/{lead_id}
+Authorization: Bearer {token}
+```
+
+### Update Lead
+```http
+PUT /api/leads/{lead_id}
+Authorization: Bearer {token}
+```
+
+### Import Leads from CSV
+```http
+POST /api/leads/import
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+file: leads.csv
+```
+
+### Lead Assignment
+```http
+POST /api/leads/assign
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "lead_ids": ["uuid1", "uuid2"],
+  "agent_id": "uuid",
+  "assignment_type": "manual"
+}
+```
+
+### Get Lead Assignments
+```http
+GET /api/leads/assignments/list?agent_id=uuid
+Authorization: Bearer {token}
+```
+
+### Lead Statistics
+```http
+GET /api/leads/stats
+Authorization: Bearer {token}
+```
+
+---
+
+## 📞 Call Management
+
+### Initiate Call
+```http
+POST /api/calls/initiate
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "lead_id": "uuid",
+  "agent_id": "uuid",
+  "call_type": "outbound"
+}
+```
+
+**Response:**
+```json
+{
+  "attempt_id": "uuid",
+  "retell_call_id": "retell_uuid",
+  "call_status": "initiated",
+  "lead": {
+    "id": "uuid",
+    "name": "John Doe",
+    "phone_number": "+1234567890"
+  },
+  "agent": {
+    "id": "uuid",
+    "name": "Sarah Wilson"
+  },
+  "message": "Call initiated successfully"
+}
+```
+
+### List Calls
+```http
+GET /api/calls/?agent_id=uuid&lead_id=uuid&status=completed&limit=50&offset=0
+Authorization: Bearer {token}
+```
+
+### Get Call Details
+```http
+GET /api/calls/{attempt_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "agent_id": "uuid",
+  "lead_id": "uuid",
+  "channel": "voice",
+  "status": "completed",
+  "outcome": "interested",
+  "duration_seconds": 300,
+  "cost_usd": 0.15,
+  "retell_call_id": "retell_uuid",
+  "transcript": "Full conversation transcript...",
+  "analysis": {
+    "sentiment": "positive",
+    "key_points": ["interested in product", "budget confirmed"],
+    "next_steps": ["send proposal", "schedule demo"]
+  },
+  "initiated_at": "timestamp",
+  "completed_at": "timestamp"
+}
+```
+
+### Retell Webhook (for real-time updates)
+```http
+POST /api/calls/webhook/retell
+```
+
+### LLM Response Generation
+```http
+POST /api/calls/llm/response
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "agent_id": "uuid",
+  "lead_id": "uuid",
+  "conversation_history": [
+    {
+      "role": "user",
+      "content": "I'm interested in your product"
+    }
+  ],
+  "context": {
+    "lead_name": "John",
+    "company": "Example Corp"
+  }
+}
+```
+
+### Conversation Analysis
+```http
+POST /api/calls/llm/analyze
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "transcript": "Full conversation transcript...",
+  "agent_id": "uuid",
+  "lead_id": "uuid"
+}
+```
+
+### WebSocket for Real-time LLM
+```javascript
+const ws = new WebSocket('ws://localhost:8000/api/calls/llm/websocket/{agent_id}');
+```
+
+### Call Statistics
+```http
+GET /api/calls/stats/overview?agent_id=uuid&days=30
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "total_calls": 150,
+  "completed_calls": 120,
+  "success_rate": 80.0,
+  "avg_duration_seconds": 245.5,
+  "total_duration_minutes": 490.0,
+  "status_breakdown": {
+    "completed": 120,
+    "failed": 15,
+    "in_progress": 15
+  },
+  "period_days": 30
+}
+```
+
+---
+
+## 📝 Content Generation
+
+### Generate Template
+```http
+POST /api/content/generate-template
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "description": "Create a friendly cold call script for software sales",
+  "template_type": "cold_call",
+  "channel": "voice",
+  "language": "en",
+  "agent_id": "uuid" // optional
+}
+```
+
+**Response:**
+```json
+{
+  "template_id": "uuid",
+  "template_content": "Hi {lead_name}, this is {agent_name} from {company}...",
+  "template_type": "cold_call",
+  "channel": "voice",
+  "language": "en",
+  "description": "Create a friendly cold call script for software sales",
+  "metadata": {
+    "generation_method": "llm_assisted",
+    "agent_id": "uuid",
+    "created_at": "timestamp",
+    "word_count": 35
+  }
+}
+```
+
+### Generate YAML from Script
+```http
+POST /api/content/generate-yaml
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "script_text": "Hello, I'm calling about our software solution...",
+  "agent_id": "uuid",
+  "script_type": "sales_call"
+}
+```
+
+### Personalize Content
+```http
+POST /api/content/personalize
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "template_content": "Hello {lead_name}, this is {agent_name}...",
+  "lead_id": "uuid",
+  "agent_id": "uuid",
+  "personalization_level": "high"
+}
+```
+
+### Translate Content
+```http
+POST /api/content/translate
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "content": "Hello, how are you today?",
+  "source_language": "en",
+  "target_language": "es",
+  "content_type": "greeting"
+}
+```
+
+### Optimize Content
+```http
+POST /api/content/optimize
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "content": "Your current script...",
+  "optimization_goal": "engagement",
+  "target_audience": "enterprise_buyers",
+  "channel": "voice"
+}
+```
+
+### Get Supported Languages
+```http
+GET /api/content/supported-languages
+```
+
+### Get Template Types
+```http
+GET /api/content/template-types
+```
+
+### Get Optimization Goals
+```http
+GET /api/content/optimization-goals
+```
+
+### Content Generation History
+```http
+GET /api/content/generation-history?limit=50&offset=0
+Authorization: Bearer {token}
+```
+
+### Content Analytics
+```http
+GET /api/content/analytics?days=30
+Authorization: Bearer {token}
+```
+
+---
+
+## 📅 Communication Scheduling & Automation
+
+### Schedule Communication
+```http
+POST /api/schedule/communication
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "lead_id": "uuid",
+  "agent_id": "uuid",
+  "channel": "voice",
+  "schedule_type": "scheduled",
+  "scheduled_at": "2025-06-21T14:00:00Z",
+  "priority": "high",
+  "timezone": "America/New_York",
+  "metadata": {
+    "campaign_id": "uuid",
+    "follow_up_step": 1
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "schedule_id": "uuid",
+  "scheduled_at": "2025-06-21T14:00:00Z",
+  "lead": {
+    "id": "uuid",
+    "name": "John Doe",
+    "phone_number": "+1234567890"
+  },
+  "agent": {
+    "id": "uuid",
+    "name": "Sarah Wilson"
+  },
+  "priority": "high",
+  "status": "scheduled"
+}
+```
+
+### Create Campaign
+```http
+POST /api/schedule/campaign
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "Q1 Outreach Campaign",
+  "agent_id": "uuid",
+  "lead_ids": ["uuid1", "uuid2", "uuid3"],
+  "campaign_config": {
+    "sequence": [
+      {
+        "delay_hours": 0,
+        "channel": "voice",
+        "priority": "high",
+        "name": "Initial Call",
+        "message": "Introduction call"
+      },
+      {
+        "delay_hours": 24,
+        "channel": "email",
+        "priority": "medium",
+        "name": "Follow-up Email",
+        "message": "Thank you for your time"
+      },
+      {
+        "delay_hours": 72,
+        "channel": "voice",
+        "priority": "medium",
+        "name": "Second Call",
+        "message": "Check-in call"
+      }
+    ]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "campaign_id": "uuid",
+  "name": "Q1 Outreach Campaign",
+  "total_leads": 3,
+  "scheduled_leads": 3,
+  "status": "active",
+  "config": {...}
+}
+```
+
+### Setup Follow-up Sequence
+```http
+POST /api/schedule/follow-up
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "lead_id": "uuid",
+  "agent_id": "uuid",
+  "sequence_config": {
+    "follow_ups": [
+      {
+        "delay_hours": 24,
+        "channel": "voice",
+        "priority": "high",
+        "type": "check_in",
+        "message": "Following up on our conversation"
+      },
+      {
+        "delay_hours": 72,
+        "channel": "email",
+        "priority": "medium",
+        "type": "proposal",
+        "message": "Sending proposal as discussed"
+      }
+    ]
+  }
+}
+```
+
+### Get Schedule Analytics
+```http
+GET /api/schedule/analytics?days=30
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "total_scheduled": 150,
+  "completed": 120,
+  "failed": 15,
+  "pending": 15,
+  "success_rate": 80.0,
+  "avg_response_time": 45.5,
+  "busiest_hours": {
+    "10:00": 25,
+    "11:00": 30,
+    "14:00": 28,
+    "15:00": 22
+  },
+  "channel_breakdown": {
+    "voice": 90,
+    "email": 35,
+    "sms": 25
+  },
+  "priority_distribution": {
+    "high": 40,
+    "medium": 80,
+    "low": 30
+  }
+}
+```
+
+---
+
+## 📊 System Information & Health
+
+### Health Check
+```http
+GET /health
+```
+
+### Application Info
+```http
+GET /info
+```
+
+### OpenAPI Schema
+```http
+GET /openapi.json
+```
+
+### Interactive Documentation
+```
+http://localhost:8000/docs
+```
+
+---
+
+## 🔧 Data Models & Types
+
+### User Roles
+- `owner`: Full access, can manage organization
+- `admin`: Manage agents, leads, campaigns
+- `member`: Use agents, view leads
+- `viewer`: Read-only access
+
+### Agent Types
+- Voice agents (Retell integration)
+- Email agents
+- SMS agents
+- Multi-channel agents
+
+### Lead Statuses
+- `new`: Just created
+- `contacted`: Initial contact made
+- `qualified`: Meets criteria
+- `interested`: Showed interest
+- `not_interested`: Not a fit
+- `converted`: Became customer
+
+### Call Statuses
+- `initiated`: Call started
+- `in_progress`: Call active
+- `completed`: Call finished
+- `failed`: Call failed
+- `no_answer`: No response
+
+### Communication Channels
+- `voice`: Phone calls via Retell
+- `email`: Email campaigns
+- `sms`: Text messages
+- `whatsapp`: WhatsApp messages
+
+### Template Types
+- `cold_call`: Cold calling scripts
+- `follow_up`: Follow-up scripts
+- `demo_request`: Demo booking
+- `objection_handling`: Objection responses
+- `closing`: Closing scripts
+- `email_sequence`: Email templates
+- `sms_campaign`: SMS templates
+- `voicemail`: Voicemail scripts
+
+### Priority Levels
+- `urgent`: Immediate execution (5 min delay)
+- `high`: Quick execution (30 min delay)
+- `medium`: Standard execution (2 hour delay)
+- `low`: Low priority (24 hour delay)
+
+---
+
+## 🚀 Frontend Implementation Guidelines
+
+### 1. Authentication Flow
+```javascript
+// Login flow
+const login = async (email, password) => {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await response.json();
+  
+  // Store token
+  localStorage.setItem('access_token', data.access_token);
+  
+  // If no org_id, user needs to create organization
+  if (!data.org_id) {
+    redirectTo('/organization/create');
+  }
+};
+```
+
+### 2. API Client Setup
+```javascript
+class ApiClient {
+  constructor() {
+    this.baseURL = 'http://localhost:8000';
+    this.token = localStorage.getItem('access_token');
+  }
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    const response = await fetch(url, config);
+    
+    if (response.status === 401) {
+      // Token expired, redirect to login
+      localStorage.removeItem('access_token');
+      window.location.href = '/login';
+      return;
+    }
+
+    return response.json();
+  }
+
+  // Agent methods
+  async createAgent(agentData) {
+    return this.request('/api/agents/', {
+      method: 'POST',
+      body: JSON.stringify(agentData),
+    });
+  }
+
+  async getAgents() {
+    return this.request('/api/agents/');
+  }
+
+  // Call methods
+  async initiateCall(leadId, agentId) {
+    return this.request('/api/calls/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ lead_id: leadId, agent_id: agentId }),
+    });
+  }
+}
+```
+
+### 3. Real-time Updates
+```javascript
+// WebSocket for real-time call updates
+const setupCallWebSocket = (agentId) => {
+  const ws = new WebSocket(`ws://localhost:8000/api/calls/llm/websocket/${agentId}`);
+  
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    updateCallUI(data);
+  };
+  
+  return ws;
+};
+```
+
+### 4. Error Handling
+```javascript
+const handleApiError = (error) => {
+  if (error.status === 401) {
+    // Unauthorized - redirect to login
+    window.location.href = '/login';
+  } else if (error.status === 403) {
+    // Forbidden - show access denied
+    showToast('Access denied', 'error');
+  } else if (error.status >= 500) {
+    // Server error
+    showToast('Server error. Please try again.', 'error');
+  } else {
+    // Other errors
+    showToast(error.detail || 'An error occurred', 'error');
+  }
+};
+```
+
+---
+
+## 📱 Recommended Frontend Features
+
+### Dashboard
+- Organization overview
+- Active agents and their status
+- Recent calls and performance metrics
+- Scheduled communications
+- Quick actions (create agent, import leads)
+
+### Agent Management
+- Agent list with search and filters
+- Agent creation wizard
+- Voice provider selection
+- Prompt configuration interface
+- Performance analytics per agent
+
+### Lead Management
+- Lead database with search/filter
+- CSV import functionality
+- Lead assignment interface
+- Lead status pipeline
+- Communication history per lead
+
+### Call Management
+- Active calls dashboard
+- Call initiation interface
+- Real-time call monitoring
+- Call history and analytics
+- Transcript viewer
+
+### Content Studio
+- Template generation interface
+- YAML script builder
+- Content personalization tools
+- Multi-language support
+- Content library management
+
+### Campaign Management
+- Campaign creation wizard
+- Scheduling interface with calendar
+- Follow-up sequence builder
+- Campaign analytics
+- Time zone management
+
+### Analytics & Reports
+- Organization performance dashboard
+- Agent comparison reports
+- Call outcome analytics
+- Content performance metrics
+- Scheduling effectiveness
+
+---
+
+## 🔒 Security Considerations
+
+### Authentication
+- JWT tokens expire in 24 hours
+- Implement token refresh mechanism
+- Store tokens securely (httpOnly cookies recommended)
+
+### API Security
+- All endpoints require authentication except public ones
+- Role-based access control enforced
+- Input validation on all endpoints
+
+### Data Protection
+- No sensitive data in localStorage
+- Implement proper CORS headers
+- Use HTTPS in production
+
+---
+
+## 🚀 Production Deployment
+
+### Environment Variables
+```env
+# Backend will be deployed to Google Cloud Run
+PRODUCTION_API_URL=https://your-api-domain.com
+```
+
+### API Base URLs
+- **Development**: `http://localhost:8000`
+- **Production**: `https://your-api-domain.com`
+
+---
+
+This documentation provides complete integration details for building a comprehensive frontend for the Voice AI Sales Agent platform. The backend is fully functional with all major features implemented and tested.
